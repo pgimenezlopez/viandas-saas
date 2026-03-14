@@ -1,0 +1,12 @@
+streamlit
+pandas
+plotly
+openpyxl
+xlsxwriter
+google-genai
+wordcloud
+matplotlib
+python-dotenv
+fpdf2
+SQLAlchemy
+psycopg2-binary
