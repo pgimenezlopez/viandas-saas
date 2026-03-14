@@ -2,7 +2,7 @@
 
 **Plataforma ágil para la gestión integral de negocios gastronómicos de viandas y *meal-prep*.** Diseñada para eliminar la fricción operativa de la toma de pedidos manual, automatizar la consolidación de producción en cocina y optimizar la logística de reparto.
 
-[![App en Vivo](https://img.shields.io/badge/🟢_App_en_Vivo-Abrir_Plataforma-2ea44f?style=for-the-badge)](https://tu-enlace-de-streamlit-cloud.streamlit.app)
+[![App en Vivo](https://img.shields.io/badge/🟢_App_en_Vivo-Abrir_Plataforma-2ea44f?style=for-the-badge)](https://viandas-saas.streamlit.app)
 
 ![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat&logo=python&logoColor=white)
 ![Streamlit](https://img.shields.io/badge/Streamlit-Framework-FF4B4B?style=flat&logo=streamlit&logoColor=white)
