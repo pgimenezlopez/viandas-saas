@@ -32,6 +32,7 @@ Dashboard privado (protegido por credenciales) para el equipo de producción.
 - [x] **Fase 1: Motor de Ventas.** UI de clientes e integración de base de datos relacional (Supabase / PostgreSQL).
 - [x] **Fase 2: Consolidación de Producción.** Dashboard de cocina con métricas e ingeniería de datos (Pandas).
 - [ ] **Fase 3: Última Milla.** Ingesta automática de direcciones desde SQL para generar la ruta óptima de entrega y App de Chofer.
+- [ ] **Fase 4: Automatización.** Integración con WhatsApp API y LLMs (IA) para carga de menú dinámica.
 
 ---
 
@@ -48,8 +49,8 @@ Para correr este Micro-SaaS en un entorno de desarrollo local:
 2. **Crear y activar entorno virtual (Recomendado):**
     ```bash
     # En macOS/Linux
-    python3 -m venv venv
-    source venv/bin/activate
+    python3 -m venv .venv
+    source .venv/bin/activate
     ```
 
 3. **Instalar dependencias:**
