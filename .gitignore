@@ -3,14 +3,13 @@ venv/
 .venv/
 env/
 
-# Variables de entorno (¡Tus contraseñas y API Keys!)
+# Variables de entorno y contraseñas locales
 .env
+.streamlit/secrets.toml
 
 # Archivos temporales de Python y Mac
 __pycache__/
 .DS_Store
 
-# Archivos de datos (Opcional: Descomenta la línea de abajo si no quieres subir el Excel)
-# *.xlsxvenv/
-.streamlit/secrets.toml
-__pycache__/
+# Archivos de datos (Opcional: Descomenta la línea de abajo borrando el # si no querés subir los Excel)
+# *.xlsx
