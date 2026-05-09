@@ -2,6 +2,7 @@
 venv/
 .venv/
 env/
+viandas_env/
 
 # Variables de entorno y contraseñas locales
 .env
