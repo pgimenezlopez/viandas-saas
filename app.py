@@ -27,8 +27,12 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. CONEXIÓN A LA BASE DE DATOS ---
-conn = st.connection("sql")
+# --- 2. CONEXIÓN A LA BASE DE DATOS (SUPABASE) ---
+try:
+    conn = st.connection("sql")
+except Exception as e:
+    st.error("🔴 Error crítico: No se pudo establecer la conexión con la base de datos de Supabase. Verificá los secrets.")
+    st.stop()  # Detiene la ejecución de la app de forma limpia para evitar cascada de errores
 
 # --- 3. PANEL ADMINISTRATIVO (SIDEBAR) ---
 with st.sidebar:
@@ -82,10 +86,11 @@ with st.sidebar:
 # --- 4. ENCABEZADO DINÁMICO ---
 col_logo, col_head = st.columns([1, 2])
 with col_logo:
-    # Asegúrate de tener el logo en la carpeta assets/
+    # Intenta levantar el logo de la carpeta assets/ de forma segura capturando la excepción correcta
     try:
-        st.image("assets/logo_cadalu.png", width=200)
-    except:
+        st.image("assets/logo_cadalu.png", width=220)
+    except Exception as e:
+        # Silenciamos visualmente el error para el usuario, pero lo manejamos correctamente
         st.write("### 🍱 Cadalu")
 
 with col_head:
