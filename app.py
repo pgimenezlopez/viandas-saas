@@ -35,14 +35,47 @@ with st.sidebar:
     st.header("Administración")
     st.write("Acceso exclusivo para gestión de cocina.")
     
-    # El botón que genera el reporte consolidado para la cocina
-    if st.button("📊 Descargar Pedidos (Excel)"):
+    if st.button("📊 Generar Reporte Excel"):
         try:
             df_pedidos = conn.query("SELECT * FROM pedidos", ttl=0)
-            # Aquí podrías usar Pandas para consolidar platos antes de descargar
-            st.success("Reporte generado. (Lógica de descarga lista)")
-        except:
-            st.error("Error al obtener reportes.")
+            
+            if df_pedidos.empty:
+                st.warning("No hay pedidos aún.")
+            else:
+                # Hoja 2: Consolidado de producción por plato
+                from collections import Counter
+                import re
+                contador = Counter()
+                for detalle in df_pedidos['detalle']:
+                    for item in detalle.split(", "):
+                        match = re.match(r"(\d+)x (.+)", item)
+                        if match:
+                            cantidad, plato = int(match.group(1)), match.group(2)
+                            contador[plato] += cantidad
+                df_produccion = pd.DataFrame(contador.items(), columns=["Plato", "Total Porciones"])
+                df_produccion = df_produccion.sort_values("Total Porciones", ascending=False)
+
+                # Generar el Excel en memoria con dos hojas
+                import io
+                buffer = io.BytesIO()
+                with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
+                    # Convertir columnas datetime con timezone a timezone-naive
+                    for col in df_pedidos.select_dtypes(include=["datetimetz"]).columns:
+                        df_pedidos[col] = df_pedidos[col].dt.tz_localize(None)
+
+                    df_pedidos.to_excel(writer, sheet_name="Pedidos", index=False)
+                    df_produccion.to_excel(writer, sheet_name="Producción", index=False)
+                
+                st.download_button(
+                    label="⬇️ Descargar Excel",
+                    data=buffer.getvalue(),
+                    file_name="pedidos_cadalu.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+                st.success(f"Reporte listo: {len(df_pedidos)} pedidos.")
+        except Exception as e:
+            st.error(f"Error al generar reporte: {e}")
+    
     st.divider()
     st.caption("Cadalu v2.0 | 2026")
 
