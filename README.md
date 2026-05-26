@@ -42,7 +42,7 @@ Para correr este Micro-SaaS en un entorno de desarrollo local:
 
 1. **Clonar el repositorio:**
     ```bash
-    git clone [https://github.com/pgimenezlopez/viandas-saas.git](https://github.com/pgimenezlopez/viandas-saas.git)
+    git clone https://github.com/pgimenezlopez/viandas-saas.git
     cd viandas-saas
     ```
 

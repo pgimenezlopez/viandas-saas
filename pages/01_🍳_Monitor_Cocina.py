@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import datetime
 from sqlalchemy import text
 
 st.set_page_config(page_title="Monitor de Cocina", page_icon="🍳", layout="wide")
@@ -16,33 +17,61 @@ if not st.session_state.autenticado:
     clave = st.text_input("Ingresá la contraseña:", type="password")
     if st.button("Entrar", type="primary"):
         # Contraseña quemada en código para este MVP
-        if clave == "cocina2026": 
+        if clave == st.secrets["admin_password"]: 
             st.session_state.autenticado = True
             st.rerun()
         else:
             st.error("Contraseña incorrecta.")
     st.stop() # Si no está logueado, la app se detiene acá.
 
-# --- 2. LÓGICA DEL DASHBOARD ---
 
-# Botón para refrescar datos manualmente
-col_title, col_btn = st.columns([8, 2])
+# --- 2. LÓGICA DEL DASHBOARD Y FILTROS ---
+
+# Interfaz para el filtro de fechas
+col_rango, col_btn = st.columns([8, 2])
+
+with col_rango:
+    # Por defecto mostramos los últimos 7 días para no mezclar métricas históricas
+    hoy = datetime.date.today()
+    hace_una_semana = hoy - datetime.timedelta(days=7)
+    
+    fechas_seleccionadas = st.date_input(
+        "📅 Filtrar por fecha de pedido:",
+        value=(hace_una_semana, hoy),
+        max_value=hoy,
+        format="DD/MM/YYYY"
+    )
+
 with col_btn:
-    if st.button("🔄 Refrescar Pedidos", use_container_width=True):
+    st.write("") # Espaciador para alinear el botón verticalmente con el input
+    if st.button("🔄 Refrescar", use_container_width=True):
         st.cache_data.clear()
 
-# Función con caché para no saturar Supabase con consultas repetidas
+# st.date_input devuelve una tupla. Nos aseguramos de que el usuario haya seleccionado inicio y fin
+if len(fechas_seleccionadas) != 2:
+    st.warning("Seleccioná el rango completo (fecha de inicio y fin) en el calendario.")
+    st.stop()
+
+fecha_inicio, fecha_fin = fechas_seleccionadas
+
+# Función con caché que invalida los datos si cambian las fechas solicitadas
 @st.cache_data(ttl=60)
-def cargar_pedidos():
+def cargar_pedidos(f_inicio, f_fin):
     conn = st.connection("sql")
-    df = conn.query("SELECT * FROM pedidos ORDER BY fecha DESC", ttl=0)
+    
+    # Le sumamos 1 día a la fecha fin para que el SQL incluya los pedidos de hoy hasta las 23:59:59
+    f_fin_mas_uno = f_fin + datetime.timedelta(days=1)
+    
+    # Inyección segura de parámetros usando la API de Streamlit connections
+    query = "SELECT * FROM pedidos WHERE fecha >= :inicio AND fecha < :fin ORDER BY fecha DESC"
+    df = conn.query(query, params={"inicio": f_inicio, "fin": f_fin_mas_uno}, ttl=0)
     return df
 
 try:
-    df_pedidos = cargar_pedidos()
+    df_pedidos = cargar_pedidos(fecha_inicio, fecha_fin)
     
     if df_pedidos.empty:
-        st.warning("Aún no hay pedidos registrados en la base de datos.")
+        st.info("No hay pedidos registrados en este rango de fechas.")
         st.stop()
 
     # --- 3. MÉTRICAS GENERALES (Facturación) ---
