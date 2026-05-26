@@ -2,115 +2,125 @@ import streamlit as st
 import pandas as pd
 from sqlalchemy import text
 
-st.set_page_config(page_title="Admin Menú", page_icon="⚙️", layout="centered")
+# --- 1. CONFIGURACIÓN Y SEGURIDAD ---
+st.set_page_config(page_title="Administrar Menú", page_icon="⚙️", layout="wide")
 
-st.title("⚙️ Administrador de Menú")
-st.markdown("Agregá platos nuevos o editá los datos de los existentes.")
+if "autenticado" not in st.session_state:
+    st.session_state.autenticado = False
 
-password = st.text_input("Ingresá la clave de administrador:", type="password")
-
-if password == st.secrets["admin_password"]:
-    conn = st.connection("sql")
-    
-    # --- 1. FORMULARIO PARA AGREGAR PLATOS NUEVOS ---
-    st.subheader("➕ Agregar Nuevo Plato")
-    with st.form("nuevo_plato", clear_on_submit=True):
-        col1, col2 = st.columns([2, 1])
-        with col1:
-            plato = st.text_input("Nombre del Plato (Ej: Milanesa con Puré)")
-        with col2:
-            precio = st.number_input("Precio ($)", min_value=0, step=10)
-            
-        descripcion = st.text_input("Descripción corta o ingredientes")
-        submit = st.form_submit_button("Guardar Plato Nuevo")
-        
-        if submit and plato:
-            with conn.session as s:
-                s.execute(
-                    text("INSERT INTO menu_semanal (plato, descripcion, precio) VALUES (:plato, :desc, :precio)"),
-                    {"plato": plato, "desc": descripcion, "precio": precio}
-                )
-                s.commit()
-            st.success(f"¡'{plato}' agregado exitosamente!")
+if not st.session_state.autenticado:
+    st.title("🔒 Acceso a Cocina")
+    password = st.text_input("Contraseña de administrador", type="password")
+    if st.button("Ingresar"):
+        if password == st.secrets["admin_password"]:
+            st.session_state.autenticado = True
             st.rerun()
+        else:
+            st.error("Contraseña incorrecta")
+    st.stop()
 
-    st.divider()
+# --- 2. LÓGICA DE ABM (CRUD MASIVO) ---
+st.title("⚙️ Administrar Menú y Stock")
+st.info("Editá los precios, modificá el stock o agregá platos nuevos. Los cambios se guardan todos juntos en una sola transacción.")
+
+try:
+    conn = st.connection("sql")
+    # Traemos el menú incluyendo la columna stock
+    df_menu = conn.query("SELECT id, plato, descripcion, precio, stock, disponible FROM menu_semanal ORDER BY id ASC", ttl=0)
+except Exception as e:
+    st.error(f"Error al conectar con la base de datos: {e}")
+    st.stop()
+
+# Renderizamos la grilla interactiva
+df_editado = st.data_editor(
+    df_menu, 
+    key="editor_menu_cambios", 
+    num_rows="dynamic",        
+    hide_index=True, 
+    use_container_width=True,
+    disabled=["id"], 
+    column_config={
+        "id": None, 
+        "plato": st.column_config.TextColumn("Plato", required=True),
+        "descripcion": "Descripción",
+        "precio": st.column_config.NumberColumn("Precio ($)", format="%d", min_value=0),
+        "stock": st.column_config.NumberColumn("Stock", format="%d", min_value=0),
+        "disponible": "Activo"
+    }
+)
+
+# Botón para procesar la transacción masiva
+if st.button("💾 Guardar Cambios Masivos", type="primary"):
+    # Rescatamos el diccionario de estado que Streamlit genera automáticamente
+    cambios = st.session_state.editor_menu_cambios
     
-    # --- 2. EDITOR INTERACTIVO DEL MENÚ EXISTENTE ---
-    st.subheader("📋 Editar Menú Actual")
-    st.markdown("Hacé doble clic en las celdas para modificar precios o nombres. Destildá la casilla **Activo** para ocultar un plato agotado.")
-    
-    # 1. PRIMERO traemos los datos frescos de la base y creamos la variable df_menu
-    df_menu = conn.query("SELECT id, plato, descripcion, precio, disponible FROM menu_semanal ORDER BY id ASC", ttl=0)
-    
-    # 2. DESPUÉS le pasamos esa variable al editor interactivo
-    df_editado = st.data_editor(
-        df_menu, 
-        key="editor_menu_cambios", # <-- Clave fundamental para leer los deltas
-        num_rows="dynamic",        # <-- Permite agregar (+) y borrar filas
-        hide_index=True, 
-        use_container_width=True,
-        disabled=["id"], 
-        column_config={
-            "id": None, 
-            "plato": st.column_config.TextColumn("Plato", required=True),
-            "descripcion": "Descripción",
-            "precio": st.column_config.NumberColumn("Precio ($)", format="%d", min_value=0),
-            "disponible": "Activo"
-        }
-    )
-    
-    # Botón para impactar los cambios en Supabase
-    if st.button("💾 Guardar Cambios en la Base de Datos", type="primary", use_container_width=True):
-        cambios = st.session_state["editor_menu_cambios"]
-        
-        with st.spinner("Sincronizando con Supabase..."):
-            try:
-                with conn.session as s:
-                    # 1. Modificaciones (UPDATES)
-                    for idx_str, fila_modificada in cambios.get("edited_rows", {}).items():
-                        idx = int(idx_str)
-                        id_real = int(df_menu.iloc[idx]["id"])
-                        # Armamos un diccionario con los valores actuales y los pisamos con los editados
-                        valores_actuales = df_menu.iloc[idx].to_dict()
-                        valores_actuales.update(fila_modificada)
+    agregados = cambios.get("added_rows", [])
+    editados = cambios.get("edited_rows", {})
+    borrados = cambios.get("deleted_rows", [])
+
+    if not agregados and not editados and not borrados:
+        st.warning("No se detectaron cambios para guardar.")
+        st.stop()
+
+    with st.spinner("Sincronizando con la base de datos..."):
+        try:
+            # Abrimos UNA SOLA transacción para todo el lote
+            with conn.session as s:
+                
+                # 1. Procesar BAJAS (Borrados)
+                if borrados:
+                    for i in borrados:
+                        id_real = int(df_menu.iloc[i]['id'])
+                        s.execute(text("DELETE FROM menu_semanal WHERE id = :id"), {"id": id_real})
+
+                # 2. Procesar MODIFICACIONES (Editados)
+                if editados:
+                    for i, modificaciones in editados.items():
+                        id_real = int(df_menu.iloc[int(i)]['id'])
+                        
+                        # Mezclamos la fila original con los campos que la cocina modificó
+                        fila_original = df_menu.iloc[int(i)].to_dict()
+                        for col, val in modificaciones.items():
+                            fila_original[col] = val
                         
                         s.execute(
                             text("""
                                 UPDATE menu_semanal 
-                                SET plato = :p, descripcion = :d, precio = :pr, disponible = :disp
+                                SET plato = :p, descripcion = :d, precio = :pr, stock = :stk, disponible = :disp
                                 WHERE id = :id
                             """),
-                            {"p": valores_actuales["plato"], "d": valores_actuales["descripcion"], 
-                             "pr": int(valores_actuales["precio"]), "disp": bool(valores_actuales["disponible"]), 
-                             "id": id_real}
+                            {
+                                "p": fila_original["plato"], 
+                                "d": fila_original["descripcion"], 
+                                "pr": int(fila_original["precio"]), 
+                                "stk": int(fila_original["stock"]), 
+                                "disp": bool(fila_original["disponible"]), 
+                                "id": id_real
+                            }
                         )
 
-                    # 2. Altas Nuevas (INSERTS SIN ID)
-                    for nueva_fila in cambios.get("added_rows", []):
+                # 3. Procesar ALTAS (Nuevos platos)
+                if agregados:
+                    for fila in agregados:
                         s.execute(
                             text("""
-                                INSERT INTO menu_semanal (plato, descripcion, precio, disponible) 
-                                VALUES (:p, :d, :pr, :disp)
+                                INSERT INTO menu_semanal (plato, descripcion, precio, stock, disponible) 
+                                VALUES (:p, :d, :pr, :stk, :disp)
                             """),
-                            {"p": nueva_fila.get("plato", "Nuevo Plato"), 
-                             "d": nueva_fila.get("descripcion", ""), 
-                             "pr": int(nueva_fila.get("precio", 0)), 
-                             "disp": bool(nueva_fila.get("disponible", True))}
+                            {
+                                "p": fila.get("plato", "Nuevo Plato"), 
+                                "d": fila.get("descripcion", ""), 
+                                "pr": int(fila.get("precio", 0)), 
+                                "stk": int(fila.get("stock", 20)), 
+                                "disp": bool(fila.get("disponible", True))
+                            }
                         )
-                    
-                    # 3. Bajas (DELETES)
-                    for idx in cambios.get("deleted_rows", []):
-                        id_borrar = int(df_menu.iloc[idx]["id"])
-                        s.execute(text("DELETE FROM menu_semanal WHERE id = :id"), {"id": id_borrar})
 
-                    s.commit()
-                    
-                st.success("¡Operación exitosa! Menú sincronizado.")
-                st.rerun()
-                
-            except Exception as e:
-                st.error(f"Error crítico en la transacción SQL: {e}")
+                # Si todo salió bien hasta acá, consolidamos el envío en Postgres
+                s.commit()
             
-elif password:
-    st.error("Clave incorrecta.")
+            st.success("✅ ¡Menú y stock actualizados correctamente!")
+            st.rerun()
+
+        except Exception as e:
+            st.error(f"❌ Error durante la transacción: {e}")

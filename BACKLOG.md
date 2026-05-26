@@ -1,19 +1,20 @@
 # 📋 Backlog de Producto: Cadalu SaaS
 
-## Estado General: MVP en Producción 🚀
+## Estado General: MVP Sólido -> Fase 4 (Automatización) 🚀
 
 | Estado | Prioridad | Tipo | Tarea / Descripción |
 | :---: | :---: | :---: | :--- |
-| ✅ | 🔴 Alta | `Setup` | **Limpiar Base de Datos:** Ejecutar comandos `TRUNCATE` en Supabase para purgar pedidos de prueba y dejar DB limpia. |
-| ✅ | 🔴 Alta | `Contenido` | **Cargar Menú Oficial:** Ingresar el catálogo real a través del panel `st.data_editor`. |
-| ✅ | 🟡 Media | `Operativa` | **Manejo de Stock Dinámico:** Columna de stock en DB enlazada al carrito. Bloqueo automático ("Agotado") al llegar a cero. |
-| ✅ | 🟡 Media | `Operativa` | **Mensaje de Cierre (Horarios):** Validador con `ZoneInfo` para ocultar el carrito y evitar pedidos fuera de la franja operativa. |
-| ✅ | 🔵 Baja | `Analítica` | **Filtro Histórico de Fechas:** Implementación de `st.date_input` en el Monitor de Cocina para aislar la facturación de la semana actual. |
-| ✅ | 🔵 Baja | `UI/UX` | **Customización Visual:** Aplicación de paleta *Pink & Cream* inyectada nativamente vía CSS. |
-| 📋 | 🟡 Media | `Deuda Técnica` | **Refactor ABM (Bulk Updates):** Modificar el guardado de `02_Administrar_Menu.py` para enviar cambios masivos a SQLAlchemy en lugar de iterar filas. |
-| 📋 | 🔴 Alta | `Integración` | **Notificaciones Push a Cocina:** Conectar un Webhook ligero en `app.py` para avisar al celular de producción sobre nuevos pedidos ingresados. |
-| 📋 | 🔵 Baja | `Logística` | **Ruteo de Última Milla:** Extraer direcciones de Postgres y generar un link de ruta óptima en Google Maps para el chofer de la noche. |
-| 📋 | 🟣 Visión | `IA / Auto` | **Menú Bot (Gemini):** Desarrollar agente que procese audios de WhatsApp dictando el menú, estructure el JSON y lo inyecte directo a Supabase. |
+| ✅ | 🔴 Alta | `Setup` | **Limpiar Base de Datos:** Ejecutar comandos `TRUNCATE` en Supabase. |
+| ✅ | 🔴 Alta | `Contenido` | **Cargar Menú Oficial:** Ingresar el catálogo real a través del panel. |
+| ✅ | 🟡 Media | `Operativa` | **Manejo de Stock Dinámico:** Columna de stock en DB enlazada al carrito. |
+| ✅ | 🟡 Media | `Operativa` | **Mensaje de Cierre (Horarios):** Validador con `ZoneInfo` (America/Montevideo). |
+| ✅ | 🔵 Baja | `Analítica` | **Filtro Histórico de Fechas:** Implementación de `st.date_input` en el Monitor. |
+| ✅ | 🔵 Baja | `UI/UX` | **Customización Visual:** Aplicación de paleta *Pink & Cream* vía CSS. |
+| ✅ | 🔴 Alta | `Deuda Técnica`| **Fix Bugs Frontend:** Scope de variables, limpieza de código y extracción a `secrets.toml`. |
+| ✅ | 🟡 Media | `Deuda Técnica`| **Refactor ABM (Bulk Updates):** Transacción masiva en SQLAlchemy para el menú. |
+| 📋 | 🔴 Alta | `Integración` | **Notificaciones Push a Cocina:** Webhook/Telegram para avisar de nuevos pedidos. |
+| 📋 | 🔵 Baja | `Logística` | **Ruteo de Última Milla:** Extraer direcciones y generar ruta óptima en Google Maps. |
+| 📋 | 🟣 Visión | `IA / Auto` | **Menú Bot (Gemini):** Agente para procesar audios de WhatsApp a JSON e inyectar en Supabase. |
 
 **Leyenda de Estados:**
 - 📋 Pendiente (To Do)
