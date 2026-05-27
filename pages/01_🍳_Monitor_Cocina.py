@@ -73,6 +73,10 @@ try:
     if df_pedidos.empty:
         st.info("No hay pedidos registrados en este rango de fechas.")
         st.stop()
+        
+    # Tolerancia a fallos por si no existe la columna estado en la BD aún
+    if "estado" not in df_pedidos.columns:
+        df_pedidos["estado"] = "Pendiente"
 
     # --- 3. MÉTRICAS GENERALES (Facturación) ---
     st.subheader("📊 Resumen Financiero")
@@ -126,13 +130,44 @@ try:
     st.subheader("📋 Planilla de Despacho")
     st.caption("Detalle para armado de bolsas y cobranza.")
     
-    # Filtramos columnas para no mostrar el ID interno
-    df_mostrar = df_pedidos[['fecha', 'nombre', 'celular', 'barrio', 'forma_pago', 'detalle', 'total', 'notas']].copy()
+    # Toggle para ocultar los pedidos que ya fueron despachados
+    ocultar_completados = st.toggle("Ocultar pedidos completados", value=True)
     
-    # Formateamos la fecha para que sea más legible en Uruguay
-    df_mostrar['fecha'] = pd.to_datetime(df_mostrar['fecha']).dt.strftime('%d/%m %H:%M')
-    
-    st.dataframe(df_mostrar, use_container_width=True, hide_index=True)
+    df_mostrar = df_pedidos.copy()
+    if ocultar_completados:
+        df_mostrar = df_mostrar[df_mostrar["estado"] != "Completado"]
+        
+    if df_mostrar.empty:
+        st.success("🎉 ¡Excelente trabajo! No hay pedidos pendientes en esta vista.")
+    else:
+        # Formateamos la fecha para que sea más legible en Uruguay
+        df_mostrar['fecha'] = pd.to_datetime(df_mostrar['fecha']).dt.strftime('%d/%m %H:%M')
+        
+        # Iteramos sobre los pedidos para crear "tarjetas" interactivas
+        for _, row in df_mostrar.iterrows():
+            with st.container(border=True):
+                col_info, col_btn = st.columns([5, 1])
+                with col_info:
+                    st.markdown(f"**{row['nombre']}** - 📍 {row['barrio']} 📞 {row['celular']}")
+                    st.markdown(f"📦 **Pedido:** {row['detalle']}")
+                    if pd.notna(row['notas']) and str(row['notas']).strip() != "":
+                        st.warning(f"⚠️ Aclaraciones: {row['notas']}")
+                    st.caption(f"🕒 {row['fecha']} | 💰 ${row['total']} | 💳 {row['forma_pago']}")
+                
+                with col_btn:
+                    if row["estado"] != "Completado":
+                        if st.button("✔️ Listo", key=f"btn_{row['id']}", use_container_width=True, type="primary"):
+                            try:
+                                conn = st.connection("sql")
+                                with conn.session as s:
+                                    s.execute(text("UPDATE pedidos SET estado = 'Completado' WHERE id = :id"), {"id": row['id']})
+                                    s.commit()
+                                st.cache_data.clear() # Limpiar la caché para que recargue la lista
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"⚠️ ¿Agregaste la columna 'estado' a tu tabla 'pedidos' en Supabase? Detalle: {e}")
+                    else:
+                        st.button("✅ Listo", key=f"btn_done_{row['id']}", disabled=True, use_container_width=True)
 
 except Exception as e:
     st.error(f"Error al conectar con la base de datos o procesar la información: {e}")

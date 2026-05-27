@@ -1,4 +1,5 @@
 import urllib.parse
+import requests
 import streamlit as st
 import pandas as pd
 from sqlalchemy import text
@@ -68,7 +69,46 @@ with col_head:
 
 st.divider()
 
-# --- 5. OBTENER MENÚ ACTIVO CON STOCK ---
+# --- 5. PANTALLA DE CONFIRMACIÓN POST-PEDIDO ---
+if st.session_state.pedido_confirmado:
+    nombre_ok    = st.session_state.get("ultimo_nombre", "")
+    resumen_ok   = st.session_state.get("ultimo_resumen", "")
+    total_ok     = st.session_state.get("ultimo_total", 0)
+    celular_ok   = st.session_state.get("ultimo_celular", "")
+    direccion_ok = st.session_state.get("ultimo_direccion", "")
+    barrio_ok    = st.session_state.get("ultimo_barrio", "")
+    pago_ok      = st.session_state.get("ultimo_pago", "")
+    notas_ok     = st.session_state.get("ultimo_notas", "")
+
+    st.success("🎉 ¡Tu pedido fue registrado en la cocina con éxito!")
+    st.balloons()
+
+    # Lectura segura del número desde la bóveda de secrets
+    numero_cocina = st.secrets.get("whatsapp_cocina", "")
+
+    mensaje_wa = (
+        f"🍱 *Nuevo Pedido Web - Cadalu*\n\n"
+        f"👤 *Cliente:* {nombre_ok}\n"
+        f"📞 *Celular:* {celular_ok}\n"
+        f"📍 *Dirección:* {direccion_ok} ({barrio_ok})\n"
+        f"💰 *Total:* ${total_ok}\n"
+        f"💳 *Pago:* {pago_ok}\n\n"
+        f"📋 *Detalle:* {resumen_ok}\n"
+        f"💡 *Notas:* {notas_ok if notas_ok else 'Ninguna'}"
+    )
+
+    url_wa = f"https://wa.me/{numero_cocina}?text={urllib.parse.quote(mensaje_wa)}"
+
+    st.link_button("📲 Enviar confirmación por WhatsApp", url_wa, use_container_width=True, type="primary")
+    st.caption("Es necesario tocar el botón para coordinar el horario de entrega con la cocina.")
+
+    if st.button("⬅️ Hacer otro pedido"):
+        st.session_state.pedido_confirmado = False
+        st.rerun()
+
+    st.stop()
+
+# --- 6. OBTENER MENÚ ACTIVO CON STOCK ---
 try:
     df_menu = conn.query(
         "SELECT plato, descripcion, precio, stock FROM menu_semanal WHERE disponible = TRUE ORDER BY id ASC",
@@ -81,7 +121,7 @@ except Exception as e:
 
 st.divider()
 
-# --- 6. CONTROL DE HORARIO OPERATIVO ---
+# --- 7. CONTROL DE HORARIO OPERATIVO ---
 zona_mvd = ZoneInfo("America/Montevideo")
 ahora = datetime.now(zona_mvd)
 
@@ -94,7 +134,7 @@ total_pesos = 0
 
 if HORA_APERTURA <= ahora.hour < HORA_CIERRE:
 
-    # --- 7. CARRITO DINÁMICO ---
+    # --- 8. CARRITO DINÁMICO ---
     st.subheader("🍽️ Menú Disponible")
 
     if df_menu.empty:
@@ -107,8 +147,11 @@ if HORA_APERTURA <= ahora.hour < HORA_CIERRE:
                 st.caption(row['descripcion'])
             
             with col_boton:
-                # Validamos si hay unidades disponibles en la cocina
-                stock_actual = int(row['stock']) if 'stock' in row else 20
+                # Validamos si hay unidades disponibles en la cocina, previniendo errores por nulos
+                if 'stock' in row and pd.notna(row['stock']):
+                    stock_actual = int(row['stock'])
+                else:
+                    stock_actual = 20
                 
                 if stock_actual > 0:
                     cantidad = st.number_input(
@@ -129,7 +172,7 @@ if HORA_APERTURA <= ahora.hour < HORA_CIERRE:
 
     st.divider()
 
-    # --- 8. RESUMEN Y FORMULARIO DE CHECKOUT ---
+    # --- 9. RESUMEN Y FORMULARIO DE CHECKOUT ---
     if total_pesos > 0:
         st.subheader("🛒 Tu Pedido")
         for plato, datos in pedido_actual.items():
@@ -170,6 +213,23 @@ if HORA_APERTURA <= ahora.hour < HORA_CIERRE:
                                 )
                                 s.commit()
 
+                            # Notificación Push a Telegram
+                            try:
+                                telegram_token = st.secrets.get("TELEGRAM_TOKEN")
+                                telegram_chat_id = st.secrets.get("TELEGRAM_CHAT_ID")
+                                
+                                if telegram_token and telegram_chat_id:
+                                    mensaje_tg = f"🔔 *Nuevo Pedido*\n👤 Nombre: {nombre}\n📍 Dirección: {direccion}\n🍽️ Resumen: {resumen_platos}"
+                                    tg_url = f"https://api.telegram.org/bot{telegram_token}/sendMessage"
+                                    requests.post(
+                                        tg_url, 
+                                        data={"chat_id": telegram_chat_id, "text": mensaje_tg, "parse_mode": "Markdown"}, 
+                                        timeout=5
+                                    )
+                            except Exception:
+                                # Fallo silencioso para no interrumpir el flujo del pedido web
+                                pass
+
                             # Respaldar datos en el estado para el renderizado del botón de WhatsApp
                             st.session_state.pedido_confirmado = True
                             st.session_state.limpiar_carrito = True
@@ -203,40 +263,3 @@ else:
                 st.markdown(f"**{row['plato']}** - ${row['precio']}")
         else:
             st.write("Menú no disponible por el momento.")
-
-# --- 9. PANTALLA DE CONFIRMACIÓN POST-PEDIDO ---
-if st.session_state.pedido_confirmado:
-
-    nombre_ok    = st.session_state.get("ultimo_nombre", "")
-    resumen_ok   = st.session_state.get("ultimo_resumen", "")
-    total_ok     = st.session_state.get("ultimo_total", 0)
-    celular_ok   = st.session_state.get("ultimo_celular", "")
-    direccion_ok = st.session_state.get("ultimo_direccion", "")
-    barrio_ok    = st.session_state.get("ultimo_barrio", "")
-    pago_ok      = st.session_state.get("ultimo_pago", "")
-    notas_ok     = st.session_state.get("ultimo_notas", "")
-
-    st.success("🎉 ¡Tu pedido fue registrado en la cocina con éxito!")
-    st.balloons()
-
-    # Lectura del número centralizado desde la bóveda de secrets
-    numero_cocina = st.secrets["whatsapp_cocina"]
-
-    mensaje_wa = (
-        f"🍱 *Nuevo Pedido Web - Cadalu*\n\n"
-        f"👤 *Cliente:* {nombre_ok}\n"
-        f"📞 *Celular:* {celular_ok}\n"
-        f"📍 *Dirección:* {direccion_ok} ({barrio_ok})\n"
-        f"💰 *Total:* ${total_ok}\n"
-        f"💳 *Pago:* {pago_ok}\n\n"
-        f"📋 *Detalle:* {resumen_ok}\n"
-        f"💡 *Notas:* {notas_ok if notas_ok else 'Ninguna'}"
-    )
-
-    url_wa = f"https://wa.me/{numero_cocina}?text={urllib.parse.quote(mensaje_wa)}"
-
-    st.link_button("📲 Enviar confirmación por WhatsApp", url_wa, use_container_width=True, type="primary")
-    st.caption("Es necesario tocar el botón para coordinar el horario de entrega con la cocina.")
-
-    st.session_state.pedido_confirmado = False
-    st.stop()
