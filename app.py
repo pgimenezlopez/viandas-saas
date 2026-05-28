@@ -54,21 +54,23 @@ if st.session_state.limpiar_carrito:
     st.session_state.limpiar_carrito = False
 
 # --- 4. ENCABEZADO DINÁMICO ---
-col_logo, col_head = st.columns([1, 2])
-with col_logo:
-    try:
-        st.image("assets/logo_cadalu.png", width=220)
-    except Exception:
-        st.write("### 🍱 Cadalu")
 
-with col_head:
-    st.title("Cadalu")
-    st.markdown("**Comidas hechas con amor**")
-    st.info("""
-    **🛵 Entregas y Logística:**
-    * **Mediodía:** Exclusivo en oficinas.
-    * **Noche:** Envíos a domicilio (coordinar por WhatsApp).
-    """)
+# 1. El truco de las 3 columnas para centrar el logo
+# Los números [1, 1.5, 1] manejan la proporción. La del medio es un poco más ancha.
+col_izq, col_centro, col_der = st.columns([1, 1.5, 1])
+
+with col_centro:
+    # Asegurate de poner la ruta correcta a tu imagen
+    st.image("ruta/a/tu/logo.png", use_container_width=True)
+
+# 2. El recuadro de logística a ancho completo justo debajo
+st.info("""
+🛵 **Entregas y Logística:**
+* **Mediodía:** Exclusivo en oficinas.
+* **Noche:** Envíos a domicilio (coordinar por WhatsApp).
+""")
+
+st.divider() # Una línea sutil para separar el encabezado del menú
 
 st.divider()
 
