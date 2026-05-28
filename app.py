@@ -61,7 +61,7 @@ col_izq, col_centro, col_der = st.columns([1, 1.5, 1])
 
 with col_centro:
     # Asegurate de poner la ruta correcta a tu imagen
-    st.image("ruta/a/tu/logo.png", use_container_width=True)
+    st.image("assets/logo_cadalu.png", use_container_width=True)
 
 # 2. El recuadro de logística a ancho completo justo debajo
 st.info("""
@@ -69,8 +69,6 @@ st.info("""
 * **Mediodía:** Exclusivo en oficinas.
 * **Noche:** Envíos a domicilio (coordinar por WhatsApp).
 """)
-
-st.divider() # Una línea sutil para separar el encabezado del menú
 
 st.divider()
 
