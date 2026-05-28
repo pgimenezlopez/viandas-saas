@@ -2,6 +2,9 @@ import urllib.parse
 import requests
 import streamlit as st
 import pandas as pd
+# app.py (al inicio)
+import streamlit as st
+from logica import calcular_total_carrito, esta_abierto
 from sqlalchemy import text
 from datetime import datetime
 from zoneinfo import ZoneInfo
