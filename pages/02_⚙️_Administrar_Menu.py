@@ -13,7 +13,6 @@ st.info("Editá los precios, modificá el stock o agregá platos nuevos. Los cam
 try:
     conn = st.connection("sql")
     df_menu = conn.query("SELECT id, plato, descripcion, precio, stock, disponible FROM menu_semanal ORDER BY id ASC", ttl=0)
-    # SEGURIDAD: Alineamos el index nativo para que coincida exactamente con las filas del editor
     df_menu = df_menu.reset_index(drop=True)
 except Exception as e:
     st.error(f"Error al conectar con la base de datos: {e}")
@@ -49,19 +48,18 @@ if st.button("💾 Guardar Cambios Masivos", type="primary"):
     with st.spinner("Sincronizando con la base de datos..."):
         try:
             with conn.session as s:
-                # 1. Bajas
                 if borrados:
                     for i in borrados:
                         id_real = int(df_menu.iloc[i]['id'])
                         s.execute(text("DELETE FROM menu_semanal WHERE id = :id"), {"id": id_real})
 
-                # 2. Modificaciones
                 if editados:
-                    for i, modificaciones in editados.items():
-                        id_real = int(df_menu.iloc[int(i)]['id'])
-                        fila_original = df_menu.iloc[int(i)].to_dict()
-                        for col, val in modificaciones.items():
-                            fila_original[col] = val
+                    for str_i, modificaciones in editados.items():
+                        i = int(str_i)
+                        id_real = int(df_menu.iloc[i]['id'])
+                        fila_original = df_menu.iloc[i].to_dict()
+                        # Actualizamos con lo nuevo
+                        fila_original.update(modificaciones)
                         
                         s.execute(
                             text("""
@@ -70,16 +68,15 @@ if st.button("💾 Guardar Cambios Masivos", type="primary"):
                                 WHERE id = :id
                             """),
                             {
-                                "p": fila_original["plato"], 
-                                "d": fila_original["descripcion"], 
-                                "pr": int(fila_original["precio"]), 
+                                "p": str(fila_original["plato"]), 
+                                "d": str(fila_original["descripcion"] or ""), 
+                                "pr": float(fila_original["precio"]), 
                                 "stk": int(fila_original["stock"]), 
                                 "disp": bool(fila_original["disponible"]), 
                                 "id": id_real
                             }
                         )
 
-                # 3. Altas
                 if agregados:
                     for fila in agregados:
                         s.execute(
@@ -88,9 +85,9 @@ if st.button("💾 Guardar Cambios Masivos", type="primary"):
                                 VALUES (:p, :d, :pr, :stk, :disp)
                             """),
                             {
-                                "p": fila.get("plato", "Nuevo Plato"), 
-                                "d": fila.get("descripcion", ""), 
-                                "pr": int(fila.get("precio", 0)), 
+                                "p": str(fila.get("plato", "Nuevo Plato")), 
+                                "d": str(fila.get("descripcion", "")), 
+                                "pr": float(fila.get("precio", 0)), 
                                 "stk": int(fila.get("stock", 20)), 
                                 "disp": bool(fila.get("disponible", True))
                             }

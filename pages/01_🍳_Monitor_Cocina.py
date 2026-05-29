@@ -1,9 +1,9 @@
 import streamlit as st
 import pandas as pd
 import datetime
-import json
 from sqlalchemy import text
 from utils.auth import require_auth
+from logica import parsear_detalle_pedido # Importamos la nueva lógica
 
 st.set_page_config(page_title="Monitor de Cocina", page_icon="🍳", layout="wide")
 st.title("🍳 Monitor de Producción - Viandas")
@@ -23,7 +23,7 @@ with col_rango:
     )
 
 @st.cache_data(ttl=60)
-def cargar_pedidos(f_inicio, f_fin):
+def cargar_pedidos(f_inicio: datetime.date, f_fin: datetime.date) -> pd.DataFrame:
     conn = st.connection("sql")
     f_fin_mas_uno = f_fin + datetime.timedelta(days=1)
     query = "SELECT * FROM pedidos WHERE fecha >= :inicio AND fecha < :fin ORDER BY fecha DESC"
@@ -32,7 +32,7 @@ def cargar_pedidos(f_inicio, f_fin):
 with col_btn:
     st.write("")
     if st.button("🔄 Refrescar", use_container_width=True):
-        cargar_pedidos.clear() # Limpieza enfocada, no global
+        cargar_pedidos.clear()
 
 if len(fechas_seleccionadas) != 2:
     st.warning("Seleccioná el rango completo en el calendario.")
@@ -51,7 +51,7 @@ try:
         df_pedidos["estado"] = "Pendiente"
 
     st.subheader("📊 Resumen Financiero")
-    total_recaudado = df_pedidos['total'].sum()
+    total_recaudado = float(df_pedidos['total'].sum())
     cantidad_pedidos = len(df_pedidos)
     ticket_promedio = total_recaudado / cantidad_pedidos if cantidad_pedidos > 0 else 0
     
@@ -64,21 +64,10 @@ try:
     st.subheader("🔥 Consolidado para la Cocina")
     st.caption("Total exacto de porciones a cocinar para evitar mermas.")
     
+    # Uso de la lógica extraída, código mucho más DRY
     lista_platos = []
     for detalle in df_pedidos["detalle"]:
-        try:
-            items = json.loads(detalle)
-            for item in items:
-                lista_platos.append({"Plato": item["plato"], "Cantidad": item["cantidad"]})
-        except (json.JSONDecodeError, KeyError, TypeError):
-            if isinstance(detalle, str):
-                for item in detalle.split(", "):
-                    if "x " in item:
-                        cant_str, nombre_plato = item.split("x ", 1)
-                        try:
-                            lista_platos.append({"Plato": nombre_plato.strip(), "Cantidad": int(cant_str)})
-                        except ValueError:
-                            pass
+        lista_platos.extend(parsear_detalle_pedido(detalle))
                 
     if lista_platos:
         df_platos = pd.DataFrame(lista_platos)
@@ -121,9 +110,9 @@ try:
                             try:
                                 conn = st.connection("sql")
                                 with conn.session as s:
-                                    s.execute(text("UPDATE pedidos SET estado = 'Completado' WHERE id = :id"), {"id": row['id']})
+                                    s.execute(text("UPDATE pedidos SET estado = 'Completado' WHERE id = :id"), {"id": int(row['id'])})
                                     s.commit()
-                                cargar_pedidos.clear() # Solo limpiamos nuestra data
+                                cargar_pedidos.clear() 
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"Error al actualizar estado: {e}")

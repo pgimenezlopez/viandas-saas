@@ -46,9 +46,10 @@ if "limpiar_carrito" not in st.session_state:
     st.session_state.limpiar_carrito = False
 
 if st.session_state.limpiar_carrito:
-    for key in list(st.session_state.keys()):
-        if key.startswith("item_"):
-            del st.session_state[key]
+    # Se hace list() para no mutar el dict mientras se itera
+    keys_a_borrar = [k for k in st.session_state.keys() if k.startswith("item_")]
+    for key in keys_a_borrar:
+        del st.session_state[key]
     st.session_state.limpiar_carrito = False
 
 col_izq, col_centro, col_der = st.columns([1, 1.5, 1])
@@ -87,9 +88,8 @@ if st.session_state.pedido_confirmado:
         st.rerun()
     st.stop()
 
-# Caché leve (15s) para no bombardear la base si hay picos de tráfico
 @st.cache_data(ttl=15)
-def obtener_menu():
+def obtener_menu() -> pd.DataFrame:
     return conn.query("SELECT plato, descripcion, precio, stock FROM menu_semanal WHERE disponible = TRUE ORDER BY id ASC", ttl=0)
 
 try:
@@ -107,7 +107,6 @@ HORA_CIERRE = 22
 
 pedido_actual = {}
 
-# Reemplazado por la lógica importada
 if esta_abierto(ahora, HORA_APERTURA, HORA_CIERRE):
     st.subheader("🍽️ Menú Disponible")
 
@@ -121,7 +120,7 @@ if esta_abierto(ahora, HORA_APERTURA, HORA_CIERRE):
                 st.caption(row['descripcion'])
             
             with col_boton:
-                stock_actual = int(row['stock']) if 'stock' in row and pd.notna(row['stock']) else 20
+                stock_actual = int(row['stock']) if pd.notna(row.get('stock')) else 20
                 
                 if stock_actual > 0:
                     cantidad = st.number_input(
@@ -133,7 +132,7 @@ if esta_abierto(ahora, HORA_APERTURA, HORA_CIERRE):
                         label_visibility="collapsed"
                     )
                     if cantidad > 0:
-                        pedido_actual[row['plato']] = {"cantidad": cantidad, "subtotal": cantidad * row['precio']}
+                        pedido_actual[str(row['plato'])] = {"cantidad": cantidad, "subtotal": cantidad * float(row['precio'])}
                 else:
                     st.error("Agotado", icon="🚫")
             st.write("")
@@ -152,10 +151,10 @@ if esta_abierto(ahora, HORA_APERTURA, HORA_CIERRE):
         with st.form("form_pedido"):
             col_f1, col_f2 = st.columns(2)
             with col_f1:
-                nombre = st.text_input("Nombre y Apellido")
-                celular = st.text_input("Celular")
+                nombre = st.text_input("Nombre y Apellido").strip()
+                celular = st.text_input("Celular").strip()
             with col_f2:
-                direccion = st.text_input("Dirección de entrega")
+                direccion = st.text_input("Dirección de entrega").strip()
                 barrio = st.selectbox("Barrio", ["Centro", "Cordón", "Pocitos", "Buceo", "Malvín", "Oficinas (Centro)", "Otro"])
 
             forma_pago = st.radio("Forma de Pago:", ["💵 Efectivo", "🏦 Transferencia", "📱 MercadoPago"], horizontal=True)
@@ -174,7 +173,6 @@ if esta_abierto(ahora, HORA_APERTURA, HORA_CIERRE):
                             agotado = None
 
                             with conn.session as s:
-                                # PREVENCIÓN DE DEADLOCKS: Ordenar alfabéticamente antes de bloquear
                                 platos_ordenados = sorted(pedido_actual.keys())
                                 
                                 for plato_nombre in platos_ordenados:
@@ -207,7 +205,7 @@ if esta_abierto(ahora, HORA_APERTURA, HORA_CIERRE):
                                 st.error(f"⚠️ '{agotado}' se agotó justo ahora. Actualizá la página.")
                                 st.stop()
                                 
-                            obtener_menu.clear() # Invalidamos caché de menú tras compra exitosa
+                            obtener_menu.clear() 
 
                             try:
                                 telegram_token = st.secrets.get("TELEGRAM_TOKEN")
@@ -218,9 +216,9 @@ if esta_abierto(ahora, HORA_APERTURA, HORA_CIERRE):
                                         f"https://api.telegram.org/bot{telegram_token}/sendMessage",
                                         data={"chat_id": telegram_chat_id, "text": mensaje_tg, "parse_mode": "Markdown"},
                                         timeout=5
-                                    ).raise_for_status()
+                                    )
                             except Exception as e:
-                                logger.error("Telegram fallback: %s", e)
+                                logger.error("Telegram fallback falló: %s", e)
 
                             st.session_state.pedido_confirmado = True
                             st.session_state.limpiar_carrito = True
