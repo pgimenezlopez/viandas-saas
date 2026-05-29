@@ -1,28 +1,17 @@
 import streamlit as st
 import pandas as pd
 import datetime
+import json
 from sqlalchemy import text
+from utils.auth import require_auth
+
 
 st.set_page_config(page_title="Monitor de Cocina", page_icon="🍳", layout="wide")
 
 st.title("🍳 Monitor de Producción - Viandas")
 
 # --- 1. SISTEMA DE LOGIN BÁSICO ---
-# Usamos session_state para recordar si el usuario ya puso la clave
-if "autenticado" not in st.session_state:
-    st.session_state.autenticado = False
-
-if not st.session_state.autenticado:
-    st.info("🔒 Acceso exclusivo para el equipo de cocina.")
-    clave = st.text_input("Ingresá la contraseña:", type="password")
-    if st.button("Entrar", type="primary"):
-        # Contraseña quemada en código para este MVP
-        if clave == st.secrets["admin_password"]: 
-            st.session_state.autenticado = True
-            st.rerun()
-        else:
-            st.error("Contraseña incorrecta.")
-    st.stop() # Si no está logueado, la app se detiene acá.
+require_auth()
 
 
 # --- 2. LÓGICA DEL DASHBOARD Y FILTROS ---
@@ -96,20 +85,27 @@ try:
     st.subheader("🔥 Consolidado para la Cocina")
     st.caption("Total exacto de porciones a cocinar para evitar mermas.")
     
-    lista_platos = []
-    
+ 
     # Recorremos la columna 'detalle' de todos los pedidos
-    for detalle in df_pedidos['detalle']:
-        # Separamos los platos de un mismo pedido por la coma
-        items = detalle.split(", ")
-        for item in items:
-            if "x " in item:
-                # Separamos "2x Pollo" en "2" y "Pollo"
-                cant_str, nombre_plato = item.split("x ", 1)
+
+    lista_platos = []
+    for detalle in df_pedidos["detalle"]:
+        try:
+            items = json.loads(detalle)
+            for item in items:
                 lista_platos.append({
-                    "Plato": nombre_plato.strip(),
-                    "Cantidad": int(cant_str)
+                    "Plato": item["plato"],
+                    "Cantidad": item["cantidad"]
                 })
+        except (json.JSONDecodeError, KeyError):
+            # Tolerancia a pedidos históricos con formato "2x Pollo, 1x Milanesa"
+            for item in detalle.split(", "):
+                if "x " in item:
+                    cant_str, nombre_plato = item.split("x ", 1)
+                    try:
+                        lista_platos.append({"Plato": nombre_plato.strip(), "Cantidad": int(cant_str)})
+                    except ValueError:
+                        pass
                 
     if lista_platos:
         df_platos = pd.DataFrame(lista_platos)

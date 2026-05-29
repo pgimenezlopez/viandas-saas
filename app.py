@@ -3,11 +3,14 @@ import requests
 import streamlit as st
 import pandas as pd
 # app.py (al inicio)
-import streamlit as st
+import logging
+import json
 from logica import calcular_total_carrito, esta_abierto
 from sqlalchemy import text
 from datetime import datetime
 from zoneinfo import ZoneInfo
+
+logger = logging.getLogger(__name__)
 
 # --- 1. CONFIGURACIÓN DE LA PÁGINA (BRANDING OFICIAL) ---
 st.set_page_config(
@@ -201,37 +204,66 @@ if HORA_APERTURA <= ahora.hour < HORA_CIERRE:
                 if nombre and direccion and celular:
                     with st.spinner("Enviando pedido a cocina..."):
                         try:
-                            resumen_platos = ", ".join([f"{d['cantidad']}x {p}" for p, d in pedido_actual.items()])
+                           
+                            resumen_legible = ", ".join([f"{d['cantidad']}x {p}" for p, d in pedido_actual.items()])
+                            detalle_json = json.dumps(
+                                [{"plato": p, "cantidad": d["cantidad"], "subtotal": d["subtotal"]}
+                                for p, d in pedido_actual.items()],
+                                ensure_ascii=False
+                            )
+                            resumen_platos = detalle_json  # misma variable, mismo INSERT, sin tocar más nada
+                            agotado = None  # None = sin problema, string = nombre del plato agotado
 
                             with conn.session as s:
-                                s.execute(
-                                    text("""
-                                        INSERT INTO pedidos (nombre, celular, direccion, barrio, forma_pago, detalle, total, notas)
-                                        VALUES (:n, :c, :d, :b, :fp, :det, :t, :not)
-                                    """),
-                                    {
-                                        "n": nombre, "c": celular, "d": direccion, "b": barrio,
-                                        "fp": forma_pago, "det": resumen_platos, "t": total_pesos, "not": notas
-                                    }
-                                )
-                                s.commit()
+                                for plato_nombre, datos in pedido_actual.items():
+                                    resultado = s.execute(
+                                        text("SELECT stock FROM menu_semanal WHERE plato = :p FOR UPDATE"),
+                                        {"p": plato_nombre}
+                                    ).fetchone()
+
+                                    if not resultado or resultado.stock < datos["cantidad"]:
+                                        s.rollback()
+                                        agotado = plato_nombre
+                                        break  # ← sale del for, NO del with
+
+                                    s.execute(
+                                        text("UPDATE menu_semanal SET stock = stock - :cant WHERE plato = :p"),
+                                        {"cant": datos["cantidad"], "p": plato_nombre}
+                                    )
+
+                                if agotado is None:  # Solo commitea si todos los platos pasaron la validación
+                                    s.execute(
+                                        text("""INSERT INTO pedidos (nombre, celular, direccion, barrio, forma_pago, detalle, total, notas)
+                                                VALUES (:n, :c, :d, :b, :fp, :det, :t, :not)"""),
+                                        {"n": nombre, "c": celular, "d": direccion, "b": barrio,
+                                        "fp": forma_pago, "det": resumen_platos, "t": total_pesos, "not": notas}
+                                    )
+                                    s.commit()
+
+                            # Fuera del with — ahora st.stop() es seguro
+                            if agotado is not None:
+                                st.error(f"⚠️ '{agotado}' se agotó justo ahora. Actualizá la página.")
+                                st.stop()
 
                             # Notificación Push a Telegram
+
                             try:
                                 telegram_token = st.secrets.get("TELEGRAM_TOKEN")
                                 telegram_chat_id = st.secrets.get("TELEGRAM_CHAT_ID")
-                                
                                 if telegram_token and telegram_chat_id:
-                                    mensaje_tg = f"🔔 *Nuevo Pedido*\n👤 Nombre: {nombre}\n📍 Dirección: {direccion}\n🍽️ Resumen: {resumen_platos}"
-                                    tg_url = f"https://api.telegram.org/bot{telegram_token}/sendMessage"
-                                    requests.post(
-                                        tg_url, 
-                                        data={"chat_id": telegram_chat_id, "text": mensaje_tg, "parse_mode": "Markdown"}, 
+                                    # Usar resumen_legible para Telegram y WA, detalle_json para la BD y session_state
+                                    mensaje_tg = f"🔔 *Nuevo Pedido*\n👤 {nombre}\n📍 {direccion}\n🍽️ {resumen_legible}"
+                                    resp = requests.post(
+                                        f"https://api.telegram.org/bot{telegram_token}/sendMessage",
+                                        data={"chat_id": telegram_chat_id, "text": mensaje_tg, "parse_mode": "Markdown"},
                                         timeout=5
                                     )
-                            except Exception:
-                                # Fallo silencioso para no interrumpir el flujo del pedido web
-                                pass
+                                    resp.raise_for_status()  # Lanza excepción si Telegram devuelve 4xx/5xx
+                            except requests.exceptions.Timeout:
+                                logger.warning("Telegram: timeout al enviar notificación para pedido de %s", nombre)
+                            except Exception as e:
+                                logger.error("Telegram: fallo inesperado — %s", e)
+                                # No se muestra al cliente, pero queda en logs de Streamlit Cloud
 
                             # Respaldar datos en el estado para el renderizado del botón de WhatsApp
                             st.session_state.pedido_confirmado = True
@@ -240,7 +272,7 @@ if HORA_APERTURA <= ahora.hour < HORA_CIERRE:
                             st.session_state.ultimo_celular = celular
                             st.session_state.ultimo_direccion = direccion
                             st.session_state.ultimo_barrio = barrio
-                            st.session_state.ultimo_resumen = resumen_platos
+                            st.session_state.ultimo_resumen = resumen_legible
                             st.session_state.ultimo_total = total_pesos
                             st.session_state.ultimo_pago = forma_pago
                             st.session_state.ultimo_notas = notas

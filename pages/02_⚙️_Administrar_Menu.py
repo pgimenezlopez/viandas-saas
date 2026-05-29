@@ -1,23 +1,14 @@
 import streamlit as st
 import pandas as pd
 from sqlalchemy import text
+from utils.auth import require_auth
+
 
 # --- 1. CONFIGURACIÓN Y SEGURIDAD ---
 st.set_page_config(page_title="Administrar Menú", page_icon="⚙️", layout="wide")
 
-if "autenticado" not in st.session_state:
-    st.session_state.autenticado = False
+require_auth()
 
-if not st.session_state.autenticado:
-    st.title("🔒 Acceso a Cocina")
-    password = st.text_input("Contraseña de administrador", type="password")
-    if st.button("Ingresar"):
-        if password == st.secrets["admin_password"]:
-            st.session_state.autenticado = True
-            st.rerun()
-        else:
-            st.error("Contraseña incorrecta")
-    st.stop()
 
 # --- 2. LÓGICA DE ABM (CRUD MASIVO) ---
 st.title("⚙️ Administrar Menú y Stock")
