@@ -1,10 +1,11 @@
-# utils/auth.py — módulo nuevo, ~20 líneas
 import hmac
 import streamlit as st
 
 def verificar_password(ingresada: str) -> bool:
     """Comparación de strings resistente a timing attacks."""
     esperada = st.secrets.get("admin_password", "")
+    if not esperada:
+        return False  # Falla segura si olvidaste configurar el secret
     return hmac.compare_digest(ingresada.encode(), esperada.encode())
 
 def require_auth() -> None:
@@ -19,4 +20,3 @@ def require_auth() -> None:
             else:
                 st.error("Contraseña incorrecta.")
         st.stop()
-        

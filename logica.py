@@ -1,11 +1,10 @@
-# logica.py
 from datetime import datetime
-from zoneinfo import ZoneInfo
+from typing import Dict, Any
 
-def calcular_total_carrito(carrito):
-    """Calcula la suma total del carrito."""
-    return sum(item["cantidad"] * item["precio"] for item in carrito)
+def calcular_total_carrito(pedido_actual: Dict[str, Dict[str, Any]]) -> float:
+    """Calcula la suma total del carrito en base al diccionario de estado."""
+    return sum(datos["subtotal"] for datos in pedido_actual.values())
 
-def esta_abierto(hora_actual, hora_apertura, hora_cierre):
+def esta_abierto(hora_actual: datetime, hora_apertura: int, hora_cierre: int) -> bool:
     """Verifica si la hora actual está dentro del rango operativo."""
     return hora_apertura <= hora_actual.hour < hora_cierre
