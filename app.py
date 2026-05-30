@@ -18,6 +18,25 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
+st.set_page_config(
+    page_title="Cadalu - TESTEO", # Cambiamos el título
+    page_icon="🧪",              # Cambiamos el icono a un tubo de ensayo
+    layout="centered",
+    initial_sidebar_state="collapsed"
+)
+
+# --- BANNER DE TESTEO ---
+# Definimos una variable de entorno en Streamlit Cloud (en Settings -> Secrets)
+# Si no existe, asumimos que estamos en producción.
+if st.secrets.get("ENVIRONMENT") == "development":
+    st.markdown("""
+        <div style="background-color: #ffcccc; padding: 10px; border-radius: 5px; text-align: center; border: 2px solid red;">
+            <h3 style="color: red; margin: 0;">⚠️ ENTORNO DE PRUEBA ⚠️</h3>
+            <p style="color: red; margin: 0;">Los pedidos realizados aquí NO llegan a la cocina.</p>
+        </div>
+    """, unsafe_allow_html=True)
+    st.write("") # Espaciador
+
 st.markdown("""
     <style>
     .main { background-color: #fffaf1; }
